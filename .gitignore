@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Model checkpoints (remove this line if you WANT to commit the ckpt)
+# *.ckpt
+
+# Large datasets
+SincQDR_Val/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
