@@ -103,26 +103,38 @@ def median_smoothing_filter(y_pred, y_true, y_pred_list, y_true_list, median_ker
     return y_pred_list, y_true_list
 
 
-def calculate_fpr_fnr(y_true, y_pred, threshold):
-    # Apply threshold to predictions
+# def calculate_fpr_fnr(y_true, y_pred, threshold):
+#     # Apply threshold to predictions
+#     y_pred_binary = (y_pred >= threshold).astype(int)
+    
+#     # Calculate confusion matrix
+#     tn, fp, fn, tp = confusion_matrix(y_true, y_pred_binary).ravel()
+    
+#     # Calculate FPR and FNR
+#     fpr = fp / (fp + tn)
+#     fnr = fn / (fn + tp)
+    
+#     return fpr, fnr
+
+def calculate_fpr_fnr(y_true, y_pred, threshold=0.5):
     y_pred_binary = (y_pred >= threshold).astype(int)
-    
-    # Calculate confusion matrix
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred_binary).ravel()
-    
-    # Calculate FPR and FNR
-    fpr = fp / (fp + tn)
-    fnr = fn / (fn + tp)
-    
-    return fpr, fnr
+
+    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0
+    tpr = tp / (tp + fn) if (tp + fn) > 0 else 0
+    tnr = tn / (tn + fp) if (tn + fp) > 0 else 0
+ 
+    return fpr, fnr, tpr, tnr
+
 
 
 def metrics_calculation(y_true, y_pred, threshold):
     auroc = roc_auc_score(y_true, y_pred)
-    fpr, fnr = calculate_fpr_fnr(y_true, y_pred, threshold)
+    fpr, fnr, tpr, tnr = calculate_fpr_fnr(y_true, y_pred, threshold)
     y_pred_binary = torch.tensor(y_pred >= threshold).float().cpu().numpy()
     f2_score = fbeta_score(y_true, y_pred_binary, beta=2)
 
     # print(f'val_labels_cat: {y_true.shape}, val_probs_cat: {y_pred.shape}, binarized_preds: {y_pred_binary.shape}')
 
-    return auroc, fpr, fnr, f2_score
+    return auroc, fpr, fnr, tpr, tnr, f2_score

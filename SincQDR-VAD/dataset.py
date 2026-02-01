@@ -8,6 +8,7 @@ import torch
 import os
 import pandas as pd
 from torch.utils.data import DataLoader
+import logging
 
 from function.preprocessing import shift_perturbation, white_noise_perturbation, spec_augment, spec_cutout
 
@@ -90,8 +91,8 @@ class SCF(Dataset):
 
         self.timemask = T.TimeMasking(time_mask_param=self.time_mask_param)
         self.freqmask = T.FrequencyMasking(freq_mask_param=15)
-        self.max_duration = max([d for _, _, d, _ in self.data])
-        self.target_length = int(self.max_duration * self.sample_rate)
+        # self.max_duration = max([d for _, _, d, _ in self.data])
+        self.target_length = int(self.sample_duration * self.sample_rate)
 
 
     def _initialize_noise_snr_map(self):
@@ -115,6 +116,7 @@ class SCF(Dataset):
     def __getitem__(self, idx):
         # Get noise information if noise addition is enabled
         print(f"Fetching index {idx}")
+        logging.info(f"Fetching index {idx}")
         if self.add_noise:
             noise_info = self.noise_snr_map.get(idx)
             noise_filename = noise_info["noise_filename"]
@@ -125,25 +127,28 @@ class SCF(Dataset):
         audio_path, label, duration, offset = self.data[idx]
         audio_path = audio_path
         frame_offset = int(offset * self.sample_rate)
-        num_frames = int(duration * self.sample_rate)
+        num_frames = int(self.sample_duration * self.sample_rate)
         
         # target_length = int(self.sample_duration * self.sample_rate)  # samples for WINDOW_SIZE
         
         waveform, _ = torchaudio.load(audio_path, frame_offset=frame_offset, num_frames=num_frames)
         print(f"Waveform loaded: {waveform.shape}")
+        logging.info(f"Waveform loaded: {waveform.shape}")
         
         # Convert to mono if necessary
         if waveform.shape[0] > 1:
             waveform = torch.mean(waveform, dim=0, keepdim=True)
             print(f"Converted to mono: {waveform.shape}")
+            logging.info(f"Converted to mono: {waveform.shape}")
         
         # Pad or truncate waveform to target_length
         if waveform.size(1) < target_length:
             pad_length = target_length - waveform.size(1)
             waveform = torch.nn.functional.pad(waveform, (0, pad_length), mode='constant')
-        # elif waveform.size(1) > target_length:
-        #     waveform = waveform[:, :target_length]
+        elif waveform.size(1) > target_length:
+            waveform = waveform[:, :target_length]
         print(f"Waveform after pad/truncate: {waveform.shape}, contiguous={waveform.is_contiguous()}")
+        logging.info(f"Waveform after pad/truncate: {waveform.shape}, contiguous={waveform.is_contiguous()}")
 
 
         # Add noise if enabled
@@ -186,6 +191,8 @@ class SCF(Dataset):
             log_mel_spec = self.log_mel_spectrogram(mel_spec)
             print(f"Mel spec shape: {mel_spec.shape}")
             print(f"{audio_path} -> {log_mel_spec.shape}")
+            logging.info(f"Mel spec shape: {mel_spec.shape}")
+            logging.info(f"{audio_path} -> {log_mel_spec.shape}")
 
             if self.augment:
                 length = torch.tensor([64] * 256)
@@ -230,6 +237,10 @@ class AVA(Dataset):
             hop_length=self.hop_length
         )
         self.log_mel_spectrogram = T.AmplitudeToDB()
+        
+        # ----- debugging -----
+        # self.max_files_per_class = max_files_per_class
+        #----- end of debug -----
         self._prepare_dataset()
 
     def _prepare_dataset(self):
@@ -239,6 +250,8 @@ class AVA(Dataset):
             'SPEECH_WITH_MUSIC': 1,
             'SPEECH_WITH_NOISE': 1
         } 
+        # class_counts = {0: 0, 1: 0}
+        # max_file = 1
 
         for folder_name in os.listdir(self.root_dir):
             folder_path = os.path.join(self.root_dir, folder_name)
@@ -257,6 +270,12 @@ class AVA(Dataset):
                             continue
                         self.audio_paths.append(os.path.join(folder_path, file_name))
                         self.labels.append(label)
+                        # ----- debugging -----
+                        # class_counts[label] += 1 
+                        # if class_counts[0] >= max_file and class_counts[1] >= max_file:
+                        #     return
+                        # ----- end of debugging -----
+                        
     
     def _pad_audio(self, waveform, target_length):
         """Pad waveform to the target length with zeros."""
