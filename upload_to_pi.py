@@ -37,8 +37,8 @@ THRESHOLD = 0.5
 # ----- parameters -----
 sample_rate = 16000
 window_duration = 0.63  
-step_size = 0.08        
-wav_path = "/home/users/ntu/angy0091/scratch/SincQDR_Val_Debug/NO_SPEECH/0a62cbfc-0b2c-47be-a2a6-e0e6adda887f.wav"
+step_size = 0.63 * (1 - 0.875)         
+wav_path = "/home/users/ntu/angy0091/scratch/test2.wav"
 
 # ----- load waveform -----
 waveform, sr = torchaudio.load(wav_path)
@@ -62,15 +62,21 @@ def chunk_waveform(waveform, duration=0.63, step_size=0.08, sample_rate=16000):
         start += step_samples
     return torch.stack(chunks)
 
-chunks = chunk_waveform(waveform, duration=0.63, step_size=0.08, sample_rate=16000) #chunks: torch.Tensor [num_chunks, 1, chunk_samples]
+chunks = chunk_waveform(waveform, duration=0.63, step_size=step_size, sample_rate=16000) #chunks: torch.Tensor [num_chunks, 1, chunk_samples]
 
 logging.info(f"Original waveform shape: {waveform.shape}")
 logging.info(f"Chunks shape: {chunks.shape}")  # should be [num_chunks, 1, 10080]
 
 # --- input into the pretrained model ---
 model = SincQDRVAD(1, 32, 64, PATCH_SIZE, 2, True).to(device)
-checkpoint_path = "/home/users/ntu/angy0091/scratch/SincQDR-VAD-All/model_last_epoch_20260206_2.ckpt"
-model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+# checkpoint_path = "/home/users/ntu/angy0091/scratch/SincQDR-VAD-All/model_epoch_5_20260224_1.ckpt"
+checkpoint_path = "/home/users/ntu/angy0091/scratch/SincQDR-VAD-All/model_last_epoch_20260225_1.ckpt"
+ckpt = torch.load(checkpoint_path, map_location=device)
+if isinstance(ckpt, dict) and "model_state" in ckpt:
+    model.load_state_dict(ckpt["model_state"])
+else:
+    model.load_state_dict(ckpt)
+
 
 model.eval()
 all_outputs = []
